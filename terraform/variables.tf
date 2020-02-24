@@ -4,52 +4,20 @@ terraform {
 
 variable "region" {
   type        = string
-  default     = "us-east4"
+  default     = "us-east1"
   description = "Region in which to create the cluster and run Atlantis."
 }
 
 variable "project" {
   type        = string
-  default     = ""
+  default     = "climacell-horus"
   description = "Project ID where Terraform is authenticated to run to create additional projects. If provided, Terraform will create the GKE and Vault cluster inside this project. If not given, Terraform will generate a new project."
-}
-
-variable "project_prefix" {
-  type        = string
-  default     = "vault-"
-  description = "String value to prefix the generated project ID with."
-}
-
-variable "billing_account" {
-  type        = string
-  description = "Billing account ID."
-}
-
-variable "org_id" {
-  type        = string
-  description = "Organization ID."
 }
 
 variable "kubernetes_instance_type" {
   type        = string
   default     = "n1-standard-2"
   description = "Instance type to use for the nodes."
-}
-
-variable "service_account_iam_roles" {
-  type = list(string)
-  default = [
-    "roles/logging.logWriter",
-    "roles/monitoring.metricWriter",
-    "roles/monitoring.viewer",
-  ]
-  description = "List of IAM roles to assign to the service account."
-}
-
-variable "service_account_custom_iam_roles" {
-  type        = list(string)
-  default     = []
-  description = "List of arbitrary additional IAM roles to attach to the service account on the Vault nodes."
 }
 
 variable "project_services" {
@@ -109,7 +77,7 @@ variable "kubernetes_nodes_per_zone" {
 
 variable "kubernetes_daily_maintenance_window" {
   type        = string
-  default     = "06:00"
+  default     = "01:00"
   description = "Maintenance window for GKE."
 }
 

@@ -114,12 +114,12 @@ resource "kubernetes_stateful_set" "vault" {
 
           env {
             name  = "GCS_BUCKET_NAME"
-            value = google_storage_bucket.vault.name
+            value = data.google_storage_bucket.vault.name
           }
 
           env {
             name  = "KMS_KEY_ID"
-            value = google_kms_crypto_key.vault-init.self_link
+            value = data.google_kms_crypto_key.vault-init.self_link
           }
 
           env {
@@ -200,14 +200,14 @@ resource "kubernetes_stateful_set" "vault" {
               ui = true
 
               seal "gcpckms" {
-                project    = "${google_kms_key_ring.vault.project}"
-                region     = "${google_kms_key_ring.vault.location}"
-                key_ring   = "${google_kms_key_ring.vault.name}"
-                crypto_key = "${google_kms_crypto_key.vault-init.name}"
+                project    = "${data.google_kms_key_ring.vault.project}"
+                region     = "${data.google_kms_key_ring.vault.location}"
+                key_ring   = "${data.google_kms_key_ring.vault.name}"
+                crypto_key = "${data.google_kms_crypto_key.vault-init.name}"
               }
 
               storage "gcs" {
-                bucket     = "${google_storage_bucket.vault.name}"
+                bucket     = "${data.google_storage_bucket.vault.name}"
                 ha_enabled = "true"
               }
 
@@ -250,5 +250,5 @@ resource "kubernetes_stateful_set" "vault" {
 }
 
 output "root_token_decrypt_command" {
-  value = "gsutil cat gs://${google_storage_bucket.vault.name}/root-token.enc | base64 --decode | gcloud kms decrypt --key ${google_kms_crypto_key.vault-init.self_link} --ciphertext-file - --plaintext-file -"
+  value = "gsutil cat gs://${data.google_storage_bucket.vault.name}/root-token.enc | base64 --decode | gcloud kms decrypt --key ${data.google_kms_crypto_key.vault-init.self_link} --ciphertext-file - --plaintext-file -"
 }

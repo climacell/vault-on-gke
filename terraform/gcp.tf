@@ -11,171 +11,198 @@ provider "google-beta" {
 
 # Generate a random id for the project - GCP projects must have globally
 # unique names
-resource "random_id" "project_random" {
-  prefix      = var.project_prefix
-  byte_length = "8"
-}
-
-# Create the project if one isn't specified
-resource "google_project" "vault" {
-  count           = var.project != "" ? 0 : 1
-  name            = random_id.project_random.hex
-  project_id      = random_id.project_random.hex
-  org_id          = var.org_id
-  billing_account = var.billing_account
-}
+//resource "random_id" "project_random" {
+//  prefix      = var.project_prefix
+//  byte_length = "8"
+//}
+//
+//# Create the project if one isn't specified
+//resource "google_project" "vault" {
+//  count           = var.project != "" ? 0 : 1
+//  name            = random_id.project_random.hex
+//  project_id      = random_id.project_random.hex
+//  org_id          = var.org_id
+//  billing_account = var.billing_account
+//}
 
 # Or use an existing project, if defined
 data "google_project" "vault" {
-  project_id = var.project != "" ? var.project : google_project.vault[0].project_id
+  project_id = "climacell-horus"
 }
 
-# Create the vault service account
-resource "google_service_account" "vault-server" {
-  account_id   = "vault-server"
-  display_name = "Vault Server"
-  project      = data.google_project.vault.project_id
+data "google_service_account" "vault-server" {
+  project = "climacell-horus"
+  account_id = "vault-server"
+  email = "vault-server@climacell-horus.iam.gserviceaccount.com"
 }
 
-# Create a service account key
-resource "google_service_account_key" "vault" {
-  service_account_id = google_service_account.vault-server.name
-}
-
-# Add the service account to the project
-resource "google_project_iam_member" "service-account" {
-  count   = length(var.service_account_iam_roles)
+data "google_kms_key_ring" "vault" {
+  name = "vault"
+  location = "global"
   project = data.google_project.vault.project_id
-  role    = element(var.service_account_iam_roles, count.index)
-  member  = "serviceAccount:${google_service_account.vault-server.email}"
 }
 
-# Add user-specified roles
-resource "google_project_iam_member" "service-account-custom" {
-  count   = length(var.service_account_custom_iam_roles)
-  project = data.google_project.vault.project_id
-  role    = element(var.service_account_custom_iam_roles, count.index)
-  member  = "serviceAccount:${google_service_account.vault-server.email}"
+data "google_kms_crypto_key" "vault-init" {
+  key_ring = "vault"
+  name = "vault-init"
 }
 
-# Enable required services on the project
-resource "google_project_service" "service" {
-  count   = length(var.project_services)
-  project = data.google_project.vault.project_id
-  service = element(var.project_services, count.index)
-
-  # Do not disable the service on destroy. On destroy, we are going to
-  # destroy the project, but we need the APIs available to destroy the
-  # underlying resources.
-  disable_on_destroy = false
+data "google_kms_crypto_key" "kubernetes-secrets" {
+  key_ring = "vault-helm-unseal-kr"
+  location = "global"
+  name = "vault-helm-unseal-key"
 }
 
-# Create the storage bucket
-resource "google_storage_bucket" "vault" {
-  name          = "${data.google_project.vault.project_id}-vault-storage"
-  project       = data.google_project.vault.project_id
-  force_destroy = true
-  storage_class = "MULTI_REGIONAL"
-
-  versioning {
-    enabled = true
-  }
-
-  lifecycle_rule {
-    action {
-      type = "Delete"
-    }
-
-    condition {
-      num_newer_versions = 1
-    }
-  }
-
-  depends_on = [google_project_service.service]
+data "google_storage_bucket" "vault" {
+  name = "horus-engine"
 }
 
-# Grant service account access to the storage bucket
-resource "google_storage_bucket_iam_member" "vault-server" {
-  count  = length(var.storage_bucket_roles)
-  bucket = google_storage_bucket.vault.name
-  role   = element(var.storage_bucket_roles, count.index)
-  member = "serviceAccount:${google_service_account.vault-server.email}"
-}
+//# Create the vault service account
+//resource "google_service_account" "vault-server" {
+//  account_id   = "vault-server"
+//  display_name = "Vault Server"
+//  project      = data.google_project.vault.project_id
+//}
+//
+//# Create a service account key
+//resource "google_service_account_key" "vault" {
+//  service_account_id = google_service_account.vault-server.name
+//}
+//
+//# Add the service account to the project
+//resource "google_project_iam_member" "service-account" {
+//  count   = length(var.service_account_iam_roles)
+//  project = data.google_project.vault.project_id
+//  role    = element(var.service_account_iam_roles, count.index)
+//  member  = "serviceAccount:${google_service_account.vault-server.email}"
+//}
+//
+//# Add user-specified roles
+//resource "google_project_iam_member" "service-account-custom" {
+//  count   = length(var.service_account_custom_iam_roles)
+//  project = data.google_project.vault.project_id
+//  role    = element(var.service_account_custom_iam_roles, count.index)
+//  member  = "serviceAccount:${google_service_account.vault-server.email}"
+//}
+//
+//# Enable required services on the project
+//resource "google_project_service" "service" {
+//  count   = length(var.project_services)
+//  project = data.google_project.vault.project_id
+//  service = element(var.project_services, count.index)
+//
+//  # Do not disable the service on destroy. On destroy, we are going to
+//  # destroy the project, but we need the APIs available to destroy the
+//  # underlying resources.
+//  disable_on_destroy = false
+//}
+
+//# Create the storage bucket
+//resource "google_storage_bucket" "vault" {
+//  name          = "${data.google_project.vault.project_id}-vault-storage"
+//  project       = data.google_project.vault.project_id
+//  force_destroy = true
+//  storage_class = "MULTI_REGIONAL"
+//
+//  versioning {
+//    enabled = true
+//  }
+//
+//  lifecycle_rule {
+//    action {
+//      type = "Delete"
+//    }
+//
+//    condition {
+//      num_newer_versions = 1
+//    }
+//  }
+//
+////  depends_on = [google_project_service.service]
+//}
+
+//# Grant service account access to the storage bucket
+//resource "google_storage_bucket_iam_member" "vault-server" {
+//  count  = length(var.storage_bucket_roles)
+//  bucket = google_storage_bucket.vault.name
+//  role   = element(var.storage_bucket_roles, count.index)
+//  member = "serviceAccount:${google_service_account.vault-server.email}"
+//}
 
 # Generate a random suffix for the KMS keyring. Like projects, key rings names
 # must be globally unique within the project. A key ring also cannot be
 # destroyed, so deleting and re-creating a key ring will fail.
 #
 # This uses a random_id to prevent that from happening.
-resource "random_id" "kms_random" {
-  prefix      = var.kms_key_ring_prefix
-  byte_length = "8"
-}
+//resource "random_id" "kms_random" {
+//  prefix      = var.kms_key_ring_prefix
+//  byte_length = "8"
+//}
 
 # Obtain the key ring ID or use a randomly generated on.
-locals {
-  kms_key_ring = var.kms_key_ring != "" ? var.kms_key_ring : random_id.kms_random.hex
-}
-
-# Create the KMS key ring
-resource "google_kms_key_ring" "vault" {
-  name     = local.kms_key_ring
-  location = var.region
-  project  = data.google_project.vault.project_id
-
-  depends_on = [google_project_service.service]
-}
-
-# Create the crypto key for encrypting init keys
-resource "google_kms_crypto_key" "vault-init" {
-  name            = var.kms_crypto_key
-  key_ring        = google_kms_key_ring.vault.id
-  rotation_period = "604800s"
-}
+//locals {
+//  kms_key_ring = var.kms_key_ring != "" ? var.kms_key_ring : random_id.kms_random.hex
+//}
+//
+//# Create the KMS key ring
+//resource "google_kms_key_ring" "vault" {
+//  name     = local.kms_key_ring
+//  location = var.region
+//  project  = data.google_project.vault.project_id
+//
+//  depends_on = [google_project_service.service]
+//}
+//
+//# Create the crypto key for encrypting init keys
+//resource "google_kms_crypto_key" "vault-init" {
+//  name            = var.kms_crypto_key
+//  key_ring        = google_kms_key_ring.vault.id
+//  rotation_period = "604800s"
+//}
 
 # Grant service account access to the key
-resource "google_kms_crypto_key_iam_member" "vault-init" {
-  crypto_key_id = google_kms_crypto_key.vault-init.id
-  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
-  member        = "serviceAccount:${google_service_account.vault-server.email}"
-}
+//resource "google_kms_crypto_key_iam_member" "vault-init" {
+//  crypto_key_id = google_kms_crypto_key.vault-init.id
+//  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+//  member        = "serviceAccount:${google_service_account.vault-server.email}"
+//}
 
 # Create the crypto key for encrypting Kubernetes secrets
-resource "google_kms_crypto_key" "kubernetes-secrets" {
-  name            = var.kubernetes_secrets_crypto_key
-  key_ring        = google_kms_key_ring.vault.id
-  rotation_period = "604800s"
-}
+//resource "google_kms_crypto_key" "kubernetes-secrets" {
+//  name            = var.kubernetes_secrets_crypto_key
+//  key_ring        = google_kms_key_ring.vault.id
+//  rotation_period = "604800s"
+//}
 
-# Grant GKE access to the key
-resource "google_kms_crypto_key_iam_member" "kubernetes-secrets-gke" {
-  crypto_key_id = google_kms_crypto_key.kubernetes-secrets.id
-  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
-  member        = "serviceAccount:service-${data.google_project.vault.number}@container-engine-robot.iam.gserviceaccount.com"
-}
+//# Grant GKE access to the key
+//resource "google_kms_crypto_key_iam_member" "kubernetes-secrets-gke" {
+//  crypto_key_id = google_kms_crypto_key.kubernetes-secrets.id
+//  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+//  member        = "serviceAccount:service-${data.google_project.vault.number}@container-engine-robot.iam.gserviceaccount.com"
+//}
 
 # Create an external NAT IP
 resource "google_compute_address" "vault-nat" {
   count   = 2
-  name    = "vault-nat-external-${count.index}"
+  name    = "horus-vault-nat-external-${count.index}"
   project = data.google_project.vault.project_id
   region  = var.region
 
-  depends_on = [google_project_service.service]
+//  depends_on = [google_project_service.service]
 }
 
 # Create a network for GKE
 resource "google_compute_network" "vault-network" {
-  name                    = "vault-network"
+  name                    = "horus-vault-network"
   project                 = data.google_project.vault.project_id
   auto_create_subnetworks = false
 
-  depends_on = [google_project_service.service]
+//  depends_on = [google_project_service.service]
 }
 
 # Create subnets
 resource "google_compute_subnetwork" "vault-subnetwork" {
-  name          = "vault-subnetwork"
+  name          = "horus-vault-subnetwork"
   project       = data.google_project.vault.project_id
   network       = google_compute_network.vault-network.self_link
   region        = var.region
@@ -184,19 +211,19 @@ resource "google_compute_subnetwork" "vault-subnetwork" {
   private_ip_google_access = true
 
   secondary_ip_range {
-    range_name    = "vault-pods"
+    range_name    = "horus-vault-pods"
     ip_cidr_range = var.kubernetes_pods_ipv4_cidr
   }
 
   secondary_ip_range {
-    range_name    = "vault-svcs"
+    range_name    = "horus-vault-svcs"
     ip_cidr_range = var.kubernetes_services_ipv4_cidr
   }
 }
 
 # Create a NAT router so the nodes can reach DockerHub, etc
 resource "google_compute_router" "vault-router" {
-  name    = "vault-router"
+  name    = "horus-vault-router"
   project = data.google_project.vault.project_id
   region  = var.region
   network = google_compute_network.vault-network.self_link
@@ -207,7 +234,7 @@ resource "google_compute_router" "vault-router" {
 }
 
 resource "google_compute_router_nat" "vault-nat" {
-  name    = "vault-nat-1"
+  name    = "horus-vault-nat-1"
   project = data.google_project.vault.project_id
   router  = google_compute_router.vault-router.name
   region  = var.region
@@ -238,7 +265,7 @@ data "google_container_engine_versions" "versions" {
 resource "google_container_cluster" "vault" {
   provider = google-beta
 
-  name     = "vault"
+  name     = "horus-vault"
   project  = data.google_project.vault.project_id
   location = var.region
 
@@ -259,12 +286,12 @@ resource "google_container_cluster" "vault" {
 
   database_encryption {
     state    = "ENCRYPTED"
-    key_name = google_kms_crypto_key.kubernetes-secrets.self_link
+    key_name = data.google_kms_crypto_key.kubernetes-secrets.self_link
   }
 
   node_config {
     machine_type    = var.kubernetes_instance_type
-    service_account = google_service_account.vault-server.email
+    service_account = data.google_service_account.vault-server.email
 
     oauth_scopes = [
       "https://www.googleapis.com/auth/cloud-platform",
@@ -277,7 +304,7 @@ resource "google_container_cluster" "vault" {
     }
 
     labels = {
-      service = "vault"
+      service = "horus-vault"
     }
 
     tags = ["vault"]
@@ -350,23 +377,23 @@ resource "google_container_cluster" "vault" {
   }
 
   depends_on = [
-    google_project_service.service,
-    google_kms_crypto_key_iam_member.vault-init,
-    google_kms_crypto_key_iam_member.kubernetes-secrets-gke,
-    google_storage_bucket_iam_member.vault-server,
-    google_project_iam_member.service-account,
-    google_project_iam_member.service-account-custom,
+//    google_project_service.service,
+//    google_kms_crypto_key_iam_member.vault-init,
+//    google_kms_crypto_key_iam_member.kubernetes-secrets-gke,
+//    google_storage_bucket_iam_member.vault-server,
+//    google_project_iam_member.service-account,
+//    google_project_iam_member.service-account-custom,
     google_compute_router_nat.vault-nat,
   ]
 }
 
 # Provision IP
 resource "google_compute_address" "vault" {
-  name    = "vault-lb"
+  name    = "horus-vault-lb"
   region  = var.region
   project = data.google_project.vault.project_id
 
-  depends_on = [google_project_service.service]
+//  depends_on = [google_project_service.service]
 }
 
 output "address" {
